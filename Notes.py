@@ -10,7 +10,7 @@ st.subheader("Add a New Note")
 c1, c2 = st.columns([1, 4])
 a=c1.text_input("Label","",key=1)
 b=c2.text_input("Description","",key=2)
-if st.button('Add'):
+if st.button('Add/Update'):
     l[a]=b
 
 st.subheader("Delete")
