@@ -1,9 +1,22 @@
 import streamlit as st
 import pickle
-    
+from cryptography.fernet import Fernet
+key = Fernet.generate_key()
+# string the key in a file
+with open('filekey.key', 'wb') as filekey:
+   filekey.write(key)
+
 st.set_page_config(layout="wide")
 my_slot1 = st.empty()
 notes_dict = open('notes_dict.pkl', 'rb')
+
+decrypted = fernet.decrypt(notes_dict)
+ 
+# opening the file in write mode and
+# writing the decrypted data
+with open('notes_dict.pkl', 'wb') as notes_dict:
+    notes_dict.write(decrypted)
+
 l=pickle.load(notes_dict)
 notes_dict.close()
 st.subheader("Add a New Note")
@@ -41,6 +54,14 @@ for i in list(l.keys()) :
 
 notes_dict = open('notes_dict.pkl', 'wb')
 pickle.dump(l, notes_dict)
+
+encrypted = fernet.encrypt(nums_dict)
+ 
+# opening the file in write mode and
+# writing the encrypted data
+with open('notes_dict.pkl', 'wb') as encrypted_file:
+    encrypted_file.write(encrypted)
+
 notes_dict.close()
 
 
