@@ -26,7 +26,6 @@ for i in l :
         st.text_input("Name",i)
     with c2:
         st.text("")
-        st.text("")
         st.write("["+l[i]+"]("+l[i]+")")
         #st.text_input("Link",l[i],key=str(i)+'a')
 
