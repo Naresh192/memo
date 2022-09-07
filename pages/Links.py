@@ -14,7 +14,7 @@ if st.button('Add'):
     l[a]=b
 
 st.subheader("Delete")
-a=st.text_input("Enter the Name to delete","",key=1)
+a=st.text_input("Enter the Name to delete","",key=3)
 if st.button('Delete'):
     del l[a]
 
