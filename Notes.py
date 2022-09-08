@@ -30,7 +30,7 @@ if st.button("Refresh") :
     pass
 
 for i in list(l.keys()) :
-    c1, c2 ,c3= st.columns([1, 4,1])
+    c1, c2 ,c3= st.columns([2, 4,1])
     with c1:
         a=st.text_input("Label",i)
     with c2:
