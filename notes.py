@@ -437,8 +437,8 @@ def page_sql_snippets():
                         configs = conn.execute("SELECT id, name, account, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
                     if configs:
                         config_options = {f"{c[1]} ({c[2]})": c for c in configs}
-                        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{row[0]}")
-                        if st.button("Run on Snowflake", key=f"run_{row[0]}"):
+                        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{snippet[0]}")
+                        if st.button("Run on Snowflake", key=f"run_{snippet[0]}"):
                             cfg = config_options[selected]
                             config_dict = {
                                 "name": cfg[1],
