@@ -58,6 +58,28 @@ def get_connection():
     # Allow cross-thread usage by creating short-lived connections per use
     return sqlite3.connect("data_engineer_notes.db", check_same_thread=False)
 
+def run_snowflake_query(config, query):
+    try:
+        conn = snowflake.connector.connect(
+            user=config["user"],
+            password=config["password"],
+            account=config["account"],
+            warehouse=config.get("warehouse"),
+            database=config.get("database"),
+            schema=config.get("schema"),
+            role=config.get("role"),
+        )
+        cur = conn.cursor()
+        cur.execute(query)
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        conn.close()
+        return columns, rows
+    except Exception as e:
+        st.error(f"❌ Snowflake execution failed: {e}")
+        return None, None
+
+
 @st.cache_resource(show_spinner=False)
 def _ensure_schema_once() -> None:
     with get_connection() as conn:
@@ -406,6 +428,32 @@ def page_sql_snippets():
                 if st.button("Delete", key=f"del_sql_{snippet[0]}"):
                     execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet[0],))
                     st.rerun()
+                st.markdown(f"**{row[1]}**  \nCategory: {row[3]}  \n{row[4]}")
+
+                # If this is a Snowflake snippet
+                if snippet[3].lower() == "snowflake":
+                    # Load saved configs
+                    with get_connection() as conn:
+                        configs = conn.execute("SELECT id, name, account, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
+                    if configs:
+                        config_options = {f"{c[1]} ({c[2]})": c for c in configs}
+                        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{row[0]}")
+                        if st.button("Run on Snowflake", key=f"run_{row[0]}"):
+                            cfg = config_options[selected]
+                            config_dict = {
+                                "name": cfg[1],
+                                "account": cfg[2],
+                                "user": cfg[3],
+                                "password": cfg[4],
+                                "warehouse": cfg[5],
+                                "database": cfg[6],
+                                "schema": cfg[7],
+                                "role": cfg[8],
+                            }
+                            cols, rows = run_snowflake_query(config_dict, row[2])  # row[2] is snippet text
+                            if cols and rows:
+                                st.dataframe(pd.DataFrame(rows, columns=cols))
+
 
 
 def page_airflow_dags():
