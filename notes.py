@@ -106,7 +106,7 @@ def _ensure_schema_once() -> None:
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
         # Snowflake configs
         c.execute('''CREATE TABLE IF NOT EXISTS snowflake_configs
-                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, user TEXT, password BLOB
+                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, user TEXT, password BLOB,
                       warehouse TEXT, database TEXT, schema TEXT, role TEXT, notes TEXT, created_at TIMESTAMP)''')
         # Data pipelines
         c.execute('''CREATE TABLE IF NOT EXISTS data_pipelines
