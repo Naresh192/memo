@@ -530,7 +530,7 @@ def to_do() :
                     with get_connection() as conn:
                         conn.execute("UPDATE todos SET status='Completed' WHERE id=?", (task[0],))
                         conn.commit()
-                    st.experimental_rerun()
+                    st.rerun()
             with col2:
                 if st.button("Delete", key=f"del_{task[0]}"):
                     with get_connection() as conn:
