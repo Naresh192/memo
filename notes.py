@@ -236,7 +236,7 @@ def init_app():
 # =====================
 
 def page_dashboard():
-    st.title("📊 Data Engineer's Dashboard")
+    st.title("📊 Naresh's Dashboard")
     with get_connection() as conn:
         c = conn.cursor()
         counts = {
