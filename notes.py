@@ -8,6 +8,7 @@ import requests
 import os
 from cryptography.fernet import Fernet, InvalidToken
 from datetime import datetime
+import snowflake.connector
 
 # =====================
 # Page configuration
