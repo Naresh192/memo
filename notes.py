@@ -517,7 +517,7 @@ def page_snowflake_configs():
             configs = conn.execute("SELECT * FROM snowflake_configs ORDER BY created_at DESC").fetchall()
         for config in configs:
             with st.expander(f"{config[1]}"):
-                decrypted_pw = decrypt_password(pw[3])
+                decrypted_pw = decrypt_password(config[5])
                 st.write(f"**Account URL:** {config[2]}")
                 st.write(f"**Warehouse:** {config[3]}")
                 st.write(f"**User Name:** {config[4]}")
