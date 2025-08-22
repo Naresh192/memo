@@ -106,7 +106,7 @@ def _ensure_schema_once() -> None:
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
         # Snowflake configs
         c.execute('''CREATE TABLE IF NOT EXISTS snowflake_configs
-                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT,
+                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, user TEXT, password BLOB
                       warehouse TEXT, database TEXT, schema TEXT, role TEXT, notes TEXT, created_at TIMESTAMP)''')
         # Data pipelines
         c.execute('''CREATE TABLE IF NOT EXISTS data_pipelines
@@ -434,7 +434,7 @@ def page_sql_snippets():
                 if snippet[3].lower() == "snowflake":
                     # Load saved configs
                     with get_connection() as conn:
-                        configs = conn.execute("SELECT id, name, account, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
+                        configs = conn.execute("SELECT id, config_name, account_url, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
                     if configs:
                         config_options = {f"{c[1]} ({c[2]})": c for c in configs}
                         selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{snippet[0]}")
@@ -498,14 +498,17 @@ def page_snowflake_configs():
             config_name = st.text_input("Configuration Name")
             account_url = st.text_input("Account URL", placeholder="https://your-account.snowflakecomputing.com")
             warehouse = st.text_input("Warehouse", value="COMPUTE_WH")
+            user = st.text_input("User Name")
+            password = st.text_input("Password", type="password")
             database = st.text_input("Database")
             schema = st.text_input("Schema", value="PUBLIC")
             role = st.text_input("Role", value="SYSADMIN")
             notes = st.text_area("Notes")
             if st.form_submit_button("Save Configuration"):
+                encrypted_pw = encrypt_password(password)
                 execute_with_github_backup(
-                    "INSERT INTO snowflake_configs (config_name, account_url, warehouse, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (config_name, account_url, warehouse, database, schema, role, notes, datetime.now())
+                    "INSERT INTO snowflake_configs (config_name, account_url,user, password warehouse, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (config_name, account_url, warehouse,user,password, database, schema, role, notes, datetime.now())
                 )
                 st.success("Snowflake configuration saved!")
 
@@ -514,13 +517,16 @@ def page_snowflake_configs():
             configs = conn.execute("SELECT * FROM snowflake_configs ORDER BY created_at DESC").fetchall()
         for config in configs:
             with st.expander(f"{config[1]}"):
+                decrypted_pw = decrypt_password(pw[3])
                 st.write(f"**Account URL:** {config[2]}")
                 st.write(f"**Warehouse:** {config[3]}")
-                st.write(f"**Database:** {config[4]}")
-                st.write(f"**Schema:** {config[5]}")
-                st.write(f"**Role:** {config[6]}")
-                st.write(f"**Notes:** {config[7]}")
-                st.write(f"**Created:** {config[8]}")
+                st.write(f"**User Name:** {config[4]}")
+                st.write(f"**Password:** {config[5]}")
+                st.write(f"**Database:** {config[6]}")
+                st.write(f"**Schema:** {config[7]}")
+                st.write(f"**Role:** {config[8]}")
+                st.write(f"**Notes:** {config[9]}")
+                st.write(f"**Created:** {config[10]}")
                 if st.button("Delete", key=f"del_snow_{config[0]}"):
                     execute_with_github_backup("DELETE FROM snowflake_configs WHERE id = ?", (config[0],))
                     st.rerun()
