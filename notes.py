@@ -524,11 +524,7 @@ def to_do() :
         for task in tasks:
             st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
             with st.expander('', expanded=True):
-                st.markdown(f'''
-                <ul style="padding-left:20px">
-                 {task[2]}
-                </ul>
-                ''', unsafe_allow_html=True)
+                st.markdown(task[2])
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Mark Completed", key=f"done_{task[0]}"):
