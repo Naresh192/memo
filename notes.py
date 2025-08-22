@@ -518,7 +518,7 @@ def page_snowflake_configs():
         for config in configs:
             with st.expander(f"{config[1]}"):
                 decrypted_pw = decrypt_password(config[5])
-                st.write(f"**Account URL:** {config[2]}")
+                st.write(f"**Account URL:** {config[1]}")
                 st.write(f"**Warehouse:** {config[3]}")
                 st.write(f"**User Name:** {config[4]}")
                 st.write(f"**Password:** {config[5]}")
