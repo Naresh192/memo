@@ -629,7 +629,7 @@ def main():
 
     st.sidebar.title("🔧 Data Engineer's Toolkit")
     page = st.sidebar.radio("Navigate to:", [
-        "Dashboard", "To Do List" "Links", "Passwords", "Files",
+        "Dashboard", "To Do List", "Links", "Passwords", "Files",
         "SQL Snippets", "Airflow DAGs", "Snowflake Configs",
         "Data Pipelines"
     ])
