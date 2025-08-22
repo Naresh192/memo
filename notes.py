@@ -427,9 +427,6 @@ def page_sql_snippets():
                 st.write(f"**Description:** {snippet[4]}")
                 st.write(f"**Tags:** {snippet[5]}")
                 st.write(f"**Created:** {snippet[6]}")
-                if st.button("Delete", key=f"del_sql_{snippet[0]}"):
-                    execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet[0],))
-                    st.rerun()
                 st.markdown(f"**{snippet[1]}**  \nCategory: {snippet[3]}  \n{snippet[4]}")
 
                 # If this is a Snowflake snippet
@@ -455,6 +452,9 @@ def page_sql_snippets():
                             cols, rows = run_snowflake_query(config_dict, snippet[2])  # row[2] is snippet text
                             if cols and rows:
                                 st.dataframe(pd.DataFrame(rows, columns=cols))
+                if st.button("Delete", key=f"del_sql_{snippet[0]}"):
+                    execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet[0],))
+                    st.rerun()
 
 
 
