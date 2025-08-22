@@ -508,7 +508,7 @@ def page_snowflake_configs():
                 encrypted_pw = encrypt_password(password)
                 execute_with_github_backup(
                     "INSERT INTO snowflake_configs (config_name, account_url, warehouse, user, password, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (config_name, account_url, warehouse,user,password, database, schema, role, notes, datetime.now())
+                    (config_name, account_url, warehouse, user, password, database, schema, role, notes, datetime.now())
                 )
                 st.success("Snowflake configuration saved!")
 
@@ -518,7 +518,7 @@ def page_snowflake_configs():
         for config in configs:
             with st.expander(f"{config[1]}"):
                 decrypted_pw = decrypt_password(config[5])
-                st.write(f"**Account URL:** {config[1]}")
+                st.write(f"**Account URL:** {config}")
                 st.write(f"**Warehouse:** {config[3]}")
                 st.write(f"**User Name:** {config[4]}")
                 st.write(f"**Password:** {config[5]}")
