@@ -1,3 +1,4 @@
 streamlit
 cryptography
 requests
+snowflake-connector-python
