@@ -523,7 +523,6 @@ def to_do() :
         
         for task in tasks:
             st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
-            st.text(task[2])
             with st.expander('', expanded=True):
                 st.markdown(f'''
                 <ul style="padding-left:20px">
