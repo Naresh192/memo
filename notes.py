@@ -513,7 +513,7 @@ def to_do() :
                     conn.execute('''
                         INSERT INTO todos (title, description, priority, due_date, status, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (title, description, priority, due_date, status, datetime.utcnow()))
+                    ''', (title, description, priority, due_date, status, datetime.now(datetime.UTC)))
                     conn.commit()
                 st.success("Task added!")
 
@@ -524,6 +524,12 @@ def to_do() :
         for task in tasks:
             st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
             st.text(task[2])
+            with st.expander('', expanded=True):
+                st.markdown(f'''
+                <ul style="padding-left:20px">
+                 {task[2]}
+                </ul>
+                ''', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Mark Completed", key=f"done_{task[0]}"):
