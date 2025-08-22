@@ -428,7 +428,7 @@ def page_sql_snippets():
                 if st.button("Delete", key=f"del_sql_{snippet[0]}"):
                     execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet[0],))
                     st.rerun()
-                st.markdown(f"**{row[1]}**  \nCategory: {row[3]}  \n{row[4]}")
+                st.markdown(f"**{snippet[1]}**  \nCategory: {snippet[3]}  \n{snippet[4]}")
 
                 # If this is a Snowflake snippet
                 if snippet[3].lower() == "snowflake":
