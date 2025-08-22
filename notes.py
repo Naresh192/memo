@@ -276,7 +276,7 @@ def page_dashboard():
             'data_pipelines': c.execute("SELECT COUNT(*) FROM data_pipelines").fetchone()[0],
             'to_do': c.execute("SELECT COUNT(*) FROM todos").fetchone()[0],
         }
-    col1, col2, col3, col4, col5 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Total Links", counts['links'])
         st.metric("SQL Snippets", counts['sql_snippets'])
