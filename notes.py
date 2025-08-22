@@ -523,7 +523,7 @@ def to_do() :
         
         for task in tasks:
             st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
-            st.write(task[2])
+            st.text(task[2])
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Mark Completed", key=f"done_{task[0]}"):
