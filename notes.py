@@ -147,7 +147,7 @@ def setup_github_sync():
 # Database setup
 def init_db():
     # Create database if it doesn't exist
-    conn = sqlite3.connect('data_engineer_notes.db')
+    conn = sqlite3.connect('data_engineer_notes.db', , check_same_thread=False)
     c = conn.cursor()
     
     # Links table
