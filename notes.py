@@ -115,6 +115,9 @@ def _ensure_schema_once() -> None:
                      (id INTEGER PRIMARY KEY, pipeline_name TEXT, description TEXT,
                       source TEXT, destination TEXT, transformation_logic TEXT,
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS todos 
+                    (id INTEGER PRIMARY KEY, title TEXT, description TEXT, priority TEXT, due_date DATE, status TEXT, created_at TIMESTAMP)''')
+        
         conn.commit()
 
 # Helper to run write queries + optional GitHub backup
@@ -271,6 +274,7 @@ def page_dashboard():
             'snowflake_configs': c.execute("SELECT COUNT(*) FROM snowflake_configs").fetchone()[0],
             'passwords': c.execute("SELECT COUNT(*) FROM passwords").fetchone()[0],
             'data_pipelines': c.execute("SELECT COUNT(*) FROM data_pipelines").fetchone()[0],
+            'to_do': c.execute("SELECT COUNT(*) FROM todos").fetchone()[0],
         }
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -285,7 +289,8 @@ def page_dashboard():
     with col4:
         st.metric("Data Pipelines", counts['data_pipelines'])
         st.metric("GitHub Sync", "✅" if st.session_state.get('auto_sync', False) else "❌")
-
+    with col5:
+        st.metric("To Do List", counts['to_do'])
     # Recent activity
     st.subheader("Recent Activity")
     recent_activities = []
@@ -490,6 +495,49 @@ def page_airflow_dags():
                     execute_with_github_backup("DELETE FROM airflow_dags WHERE id = ?", (dag[0],))
                     st.rerun()
 
+def to_do() :
+    st.title("📝 To-Do List")
+    
+    tab1, tab2 = st.tabs(["Add Task", "View Tasks"])
+    
+    with tab1:
+        with st.form("todo_form"):
+            title = st.text_input("Title")
+            description = st.text_area("Description")
+            priority = st.selectbox("Priority", ["Low", "Medium", "High"])
+            due_date = st.date_input("Due Date")
+            status = st.selectbox("Status", ["Pending", "In Progress", "Completed"])
+            
+            if st.form_submit_button("Add Task"):
+                with get_connection() as conn:
+                    conn.execute('''
+                        INSERT INTO todos (title, description, priority, due_date, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (title, description, priority, due_date, status, datetime.datetime.utcnow()))
+                    conn.commit()
+                st.success("Task added!")
+
+    with tab2:
+        with get_connection() as conn:
+            tasks = conn.execute("SELECT * FROM todos ORDER BY due_date ASC").fetchall()
+        
+        for task in tasks:
+            st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
+            st.write(task[2])
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Mark Completed", key=f"done_{task[0]}"):
+                    with get_connection() as conn:
+                        conn.execute("UPDATE todos SET status='Completed' WHERE id=?", (task[0],))
+                        conn.commit()
+                    st.experimental_rerun()
+            with col2:
+                if st.button("Delete", key=f"del_{task[0]}"):
+                    with get_connection() as conn:
+                        conn.execute("DELETE FROM todos WHERE id=?", (task[0],))
+                        conn.commit()
+                    st.experimental_rerun()
+
 
 def page_snowflake_configs():
     st.title("❄️ Snowflake Configurations")
@@ -581,13 +629,15 @@ def main():
 
     st.sidebar.title("🔧 Data Engineer's Toolkit")
     page = st.sidebar.radio("Navigate to:", [
-        "Dashboard", "Links", "Passwords", "Files",
+        "Dashboard", "To Do List" "Links", "Passwords", "Files",
         "SQL Snippets", "Airflow DAGs", "Snowflake Configs",
         "Data Pipelines"
     ])
 
     if page == "Dashboard":
         page_dashboard()
+    elif page == "To Do List" :
+        to_do()
     elif page == "Links":
         page_links()
     elif page == "Passwords":
