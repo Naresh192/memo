@@ -105,8 +105,7 @@ def _ensure_schema_once() -> None:
                      (id INTEGER PRIMARY KEY, dag_name TEXT, description TEXT,
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
         # Snowflake configs
-        c.execute('''drop TABLE snowflake_configs''')
-        c.execute('''CREATE TABLE snowflake_configs
+        c.execute('''CREATE TABLE  IF NOT EXISTS snowflake_configs
                      (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, warehouse TEXT, user TEXT, password BLOB,
                      database TEXT, schema TEXT, role TEXT, notes TEXT, created_at TIMESTAMP)''')
         # Data pipelines
