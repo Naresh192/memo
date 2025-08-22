@@ -450,7 +450,7 @@ def page_sql_snippets():
                                 "schema": cfg[7],
                                 "role": cfg[8],
                             }
-                            cols, rows = run_snowflake_query(config_dict, row[2])  # row[2] is snippet text
+                            cols, rows = run_snowflake_query(config_dict, snippet[2])  # row[2] is snippet text
                             if cols and rows:
                                 st.dataframe(pd.DataFrame(rows, columns=cols))
 
