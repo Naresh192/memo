@@ -513,7 +513,7 @@ def to_do() :
                     conn.execute('''
                         INSERT INTO todos (title, description, priority, due_date, status, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (title, description, priority, due_date, status, datetime.datetime.utcnow()))
+                    ''', (title, description, priority, due_date, status, datetime.utcnow()))
                     conn.commit()
                 st.success("Task added!")
 
