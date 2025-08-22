@@ -105,9 +105,9 @@ def _ensure_schema_once() -> None:
                      (id INTEGER PRIMARY KEY, dag_name TEXT, description TEXT,
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
         # Snowflake configs
-        c.execute('''CREATE TABLE IF NOT EXISTS snowflake_configs
-                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, user TEXT, password BLOB,
-                      warehouse TEXT, database TEXT, schema TEXT, role TEXT, notes TEXT, created_at TIMESTAMP)''')
+        c.execute('''CREATE TABLE snowflake_configs
+                     (id INTEGER PRIMARY KEY, config_name TEXT, account_url TEXT, warehouse TEXT, user TEXT, password BLOB,
+                     database TEXT, schema TEXT, role TEXT, notes TEXT, created_at TIMESTAMP)''')
         # Data pipelines
         c.execute('''CREATE TABLE IF NOT EXISTS data_pipelines
                      (id INTEGER PRIMARY KEY, pipeline_name TEXT, description TEXT,
