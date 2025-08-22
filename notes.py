@@ -536,7 +536,7 @@ def to_do() :
                     with get_connection() as conn:
                         conn.execute("DELETE FROM todos WHERE id=?", (task[0],))
                         conn.commit()
-                    st.experimental_rerun()
+                    st.rerun()
 
 
 def page_snowflake_configs():
