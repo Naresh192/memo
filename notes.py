@@ -507,7 +507,7 @@ def page_snowflake_configs():
             if st.form_submit_button("Save Configuration"):
                 encrypted_pw = encrypt_password(password)
                 execute_with_github_backup(
-                    "INSERT INTO snowflake_configs (config_name, account_url,user, password, warehouse, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO snowflake_configs (config_name, account_url, warehouse, user, password, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (config_name, account_url, warehouse,user,password, database, schema, role, notes, datetime.now())
                 )
                 st.success("Snowflake configuration saved!")
