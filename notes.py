@@ -67,6 +67,7 @@ def run_snowflake_query(config, query):
             account=config["account"],
             warehouse=config.get("warehouse"),
             database=config.get("database"),
+            authenticator='https://intusurg.okta.com/okta/sso/saml',
             schema=config.get("schema"),
             role=config.get("role"),
         )
