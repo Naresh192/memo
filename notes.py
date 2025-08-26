@@ -9,12 +9,64 @@ import os
 from cryptography.fernet import Fernet, InvalidToken
 from datetime import datetime
 import snowflake.connector
+from streamlit_ace import st_ace
+import streamlit.components.v1 as components
+
+
+import streamlit as st
+import pytz
+
+# Custom CSS for elegant buttons
+st.markdown("""
+    <style>
+    /* Center all buttons */
+    div.stButton {
+        display: flex;
+        justify-content: center;
+        margin: 3px 0;
+    }
+
+    /* Global button style */
+    div.stButton > button {
+        background-color: #262730;  /* Dark minimal */
+        color: #ffffff;
+        border: 1px solid #565869;
+        border-radius: 8px;
+        padding: 3px 10px;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        min-width: 160px;   /* Justify consistent size */
+        text-align: center;
+    }
+
+    /* Hover effect */
+    div.stButton > button:hover {
+        background-color: #40414f;
+        border-color: #7f808a;
+    }
+
+    /* Active effect */
+    div.stButton > button:active {
+        background-color: #565869;
+        transform: scale(0.98);
+    }
+
+    /* Focus effect */
+    div.stButton > button:focus {
+        outline: none;
+        border: 1px solid #8a56f0;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 
 # =====================
 # Page configuration
 # =====================
 st.set_page_config(
-    page_title="Data Engineer's Notes App",
+    page_title="Naresh's Notes App",
     page_icon="📊",
     layout="wide"
 )
@@ -67,7 +119,7 @@ def run_snowflake_query(config, query):
             account=config["account"],
             warehouse=config.get("warehouse"),
             database=config.get("database"),
-            #authenticator='https://intusurg.okta.com/okta/sso/saml',
+            authenticator='https://intusurg.okta.com/okta/sso/saml',
             schema=config.get("schema"),
             role=config.get("role"),
         )
@@ -117,6 +169,9 @@ def _ensure_schema_once() -> None:
                       schedule TEXT, owner TEXT, tags TEXT, created_at TIMESTAMP)''')
         c.execute('''CREATE TABLE IF NOT EXISTS todos 
                     (id INTEGER PRIMARY KEY, title TEXT, description TEXT, priority TEXT, due_date DATE, status TEXT, created_at TIMESTAMP)''')
+        #Timezones
+        c.execute('''CREATE TABLE IF NOT EXISTS timezones
+                     (id INTEGER PRIMARY KEY, tz_name TEXT, created_at TIMESTAMP)''')
         
         conn.commit()
 
@@ -275,6 +330,7 @@ def page_dashboard():
             'passwords': c.execute("SELECT COUNT(*) FROM passwords").fetchone()[0],
             'data_pipelines': c.execute("SELECT COUNT(*) FROM data_pipelines").fetchone()[0],
             'to_do': c.execute("SELECT COUNT(*) FROM todos").fetchone()[0],
+	    'timezones': c.execute("SELECT COUNT(*) FROM timezones").fetchone()[0],
         }
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -288,15 +344,16 @@ def page_dashboard():
         st.metric("Passwords", counts['passwords'])
     with col4:
         st.metric("Data Pipelines", counts['data_pipelines'])
-        st.metric("GitHub Sync", "✅" if st.session_state.get('auto_sync', False) else "❌")
+        st.metric("Timezones", counts['timezones'])
     with col5:
         st.metric("To Do List", counts['to_do'])
+        st.metric("GitHub Sync", "✅" if st.session_state.get('auto_sync', False) else "❌")
     # Recent activity
     st.subheader("Recent Activity")
     recent_activities = []
     with get_connection() as conn:
         c = conn.cursor()
-        for table in ['links', 'sql_snippets', 'airflow_dags', 'files', 'data_pipelines']:
+        for table in ['links', 'sql_snippets', 'airflow_dags', 'files', 'data_pipelines','snowflake_configs','passwords','todos','timezones']:
             items = c.execute(f"SELECT * FROM {table} ORDER BY created_at DESC LIMIT 3").fetchall()
             for item in items:
                 title = item[1] if len(item) > 1 else table
@@ -343,6 +400,7 @@ def page_passwords():
     st.title("🔐 Password Manager")
     tab1, tab2 = st.tabs(["Add Password", "View Passwords"])
 
+    # ---------------- Add Password ----------------
     with tab1:
         with st.form("password_form"):
             service = st.text_input("Service/Application")
@@ -357,19 +415,46 @@ def page_passwords():
                 )
                 st.success("Password saved securely!")
 
+    # ---------------- View Passwords ----------------
     with tab2:
+        search_query = st.text_input("🔍 Search by service, username, or notes")
+
         with get_connection() as conn:
             passwords = conn.execute("SELECT * FROM passwords ORDER BY service").fetchall()
-        for pw in passwords:
-            with st.expander(f"{pw[1]} - {pw[2]}"):
-                decrypted_pw = decrypt_password(pw[3])
-                st.write(f"**Username:** {pw[2]}")
-                st.write(f"**Password:** `{decrypted_pw}`")
-                st.write(f"**Notes:** {pw[4]}")
-                st.write(f"**Created:** {pw[5]}")
-                if st.button("Delete", key=f"del_pw_{pw[0]}"):
-                    execute_with_github_backup("DELETE FROM passwords WHERE id = ?", (pw[0],))
-                    st.rerun()
+
+        # Filter results
+        if search_query:
+            search_query_lower = search_query.lower()
+            passwords = [
+                pw for pw in passwords
+                if search_query_lower in str(pw[1]).lower()   # service
+                or search_query_lower in str(pw[2]).lower()  # username
+                or search_query_lower in str(pw[4]).lower()  # notes
+            ]
+
+        if not passwords:
+            st.info("No matching passwords found.")
+        else:
+            for pw in passwords:
+                with st.expander(f"{pw[1]} - {pw[2]}", expanded=False):
+                    decrypted_pw = decrypt_password(pw[3])
+                    st.write(f"**Username:** {pw[2]}")
+                    st.markdown(
+                        f"""
+                        <div style="display: flex; gap: 10px; padding-bottom: 12px;">
+                            <span><b>Password:</b></span>
+                            <span style="margin: 0; border-radius: 6px;">{decrypted_pw}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    st.write(f"**Notes:** {pw[4]}")
+                    st.write(f"**Created:** {pw[5]}")
+
+                    if st.button("Delete", key=f"del_pw_{pw[0]}"):
+                        execute_with_github_backup("DELETE FROM passwords WHERE id = ?", (pw[0],))
+                        st.rerun()
+
 
 
 def page_files():
@@ -428,11 +513,12 @@ def page_sql_snippets():
             snippets = conn.execute("SELECT * FROM sql_snippets ORDER BY created_at DESC").fetchall()
         for snippet in snippets:
             with st.expander(f"{snippet[1]} ({snippet[3]})"):
-                st.code(snippet[2], language='sql')
+                #st.code(snippet[2], language='sql')
+                user_code = st_ace(value=snippet[2], language="sql", theme="monokai", height=100)
                 st.write(f"**Description:** {snippet[4]}")
                 st.write(f"**Tags:** {snippet[5]}")
                 st.write(f"**Created:** {snippet[6]}")
-                st.markdown(f"**{snippet[1]}**  \nCategory: {snippet[3]}  \n{snippet[4]}")
+                st.markdown(f"**Category:** {snippet[3]}  ")
 
                 # If this is a Snowflake snippet
                 if snippet[3].lower() == "snowflake":
@@ -454,7 +540,7 @@ def page_sql_snippets():
                                 "schema": cfg[7],
                                 "role": cfg[8],
                             }
-                            cols, rows = run_snowflake_query(config_dict, snippet[2])  # row[2] is snippet text
+                            cols, rows = run_snowflake_query(config_dict, user_code)  # row[2] is snippet text
                             if cols and rows:
                                 st.dataframe(pd.DataFrame(rows, columns=cols))
                 if st.button("Delete", key=f"del_sql_{snippet[0]}"):
@@ -496,7 +582,7 @@ def page_airflow_dags():
                     st.rerun()
 
 def to_do() :
-    st.title("📝 To-Do List")
+    st.title("📝 To-Do List/Notes")
     
     tab1, tab2 = st.tabs(["Add Task", "View Tasks"])
     
@@ -513,31 +599,72 @@ def to_do() :
                     conn.execute('''
                         INSERT INTO todos (title, description, priority, due_date, status, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (title, description, priority, due_date, status, datetime.now(datetime.UTC)))
+                    ''', (title, description, priority, due_date, status, datetime.now()))
                     conn.commit()
                 st.success("Task added!")
 
     with tab2:
         with get_connection() as conn:
             tasks = conn.execute("SELECT * FROM todos ORDER BY due_date ASC").fetchall()
-        
+
         for task in tasks:
             st.write(f"**{task[1]}** [{task[5]}] - Due: {task[4]}")
-            with st.expander('', expanded=True):
+            with st.expander("Details", expanded=False):
                 st.markdown(task[2])
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Mark Completed", key=f"done_{task[0]}"):
-                    with get_connection() as conn:
-                        conn.execute("UPDATE todos SET status='Completed' WHERE id=?", (task[0],))
-                        conn.commit()
-                    st.rerun()
-            with col2:
-                if st.button("Delete", key=f"del_{task[0]}"):
-                    with get_connection() as conn:
-                        conn.execute("DELETE FROM todos WHERE id=?", (task[0],))
-                        conn.commit()
-                    st.rerun()
+
+                col1, col2, col3 = st.columns(3)
+
+                # ✅ Mark completed
+                with col1:
+                    if st.button("Mark Completed", key=f"done_{task[0]}"):
+                        with get_connection() as conn:
+                            conn.execute("UPDATE todos SET status='Completed' WHERE id=?", (task[0],))
+                            conn.commit()
+                        st.rerun()
+
+                # ❌ Delete
+                with col2:
+                    if st.button("Delete", key=f"del_{task[0]}"):
+                        with get_connection() as conn:
+                            conn.execute("DELETE FROM todos WHERE id=?", (task[0],))
+                            conn.commit()
+                        st.rerun()
+
+                # ✏️ Edit
+                with col3:
+                    if st.button("Edit", key=f"edit_{task[0]}"):
+                        st.session_state[f"editing_{task[0]}"] = True
+
+                # Show edit form if editing
+                if st.session_state.get(f"editing_{task[0]}", False):
+                    with st.form(f"edit_form_{task[0]}"):
+                        new_title = st.text_input("Title", task[1])
+                        new_description = st.text_area("Description", task[2])
+                        new_priority = st.selectbox("Priority", ["Low", "Medium", "High"], index=["Low", "Medium", "High"].index(task[3]))
+                        new_due_date = st.date_input("Due Date", task[4])
+                        new_status = st.selectbox("Status", ["Pending", "In Progress", "Completed", "Blocked"], index=["Pending", "In Progress", "Completed", "Blocked"].index(task[5]))
+
+                        save_btn = st.form_submit_button("Save Changes")
+                        cancel_btn = st.form_submit_button("Cancel")
+
+                        if save_btn:
+                            with get_connection() as conn:
+                                conn.execute(
+                                    '''
+                                    UPDATE todos
+                                    SET title=?, description=?, priority=?, due_date=?, status=?
+                                    WHERE id=?
+                                    ''',
+                                    (new_title, new_description, new_priority, new_due_date, new_status, task[0])
+                                )
+                                conn.commit()
+                            st.session_state[f"editing_{task[0]}"] = False
+                            st.success("Task updated!")
+                            st.rerun()
+
+                        if cancel_btn:
+                            st.session_state[f"editing_{task[0]}"] = False
+                            st.rerun()
 
 
 def page_snowflake_configs():
@@ -569,7 +696,7 @@ def page_snowflake_configs():
         for config in configs:
             with st.expander(f"{config[1]}"):
                 decrypted_pw = decrypt_password(config[5])
-                st.write(f"**Account URL:** {config}")
+                st.write(f"**Account URL:** {config[2]}")
                 st.write(f"**Warehouse:** {config[3]}")
                 st.write(f"**User Name:** {config[4]}")
                 st.write(f"**Password:** {config[5]}")
@@ -621,6 +748,81 @@ def page_data_pipelines():
                     execute_with_github_backup("DELETE FROM data_pipelines WHERE id = ?", (pipeline[0],))
                     st.rerun()
 
+def page_timezones():
+    st.title("🌍 Timezone Viewer")
+
+    # Determine current theme (dark/light)
+
+
+    # --- Add new timezone ---
+    all_timezones = pytz.all_timezones
+    selected_tz = st.selectbox("Select a timezone to add", all_timezones)
+
+    if st.button("➕ Add Timezone"):
+        with get_connection() as conn:
+            exists = conn.execute("SELECT COUNT(*) FROM timezones WHERE tz_name=?", (selected_tz,)).fetchone()[0]
+            if exists == 0:
+                execute_with_github_backup(
+                    "INSERT INTO timezones (tz_name, created_at) VALUES (?, ?)",
+                    (selected_tz, datetime.now())
+                )
+                st.success(f"Added {selected_tz}")
+                st.rerun()
+            else:
+                st.warning(f"{selected_tz} already exists")
+
+    st.divider()
+
+    # --- Show saved timezones ---
+    with get_connection() as conn:
+        saved_timezones = conn.execute("SELECT * FROM timezones ORDER BY tz_name").fetchall()
+
+    if not saved_timezones:
+        st.info("No timezones added yet.")
+    else:
+      for tz_row in saved_timezones:
+        tz_id, tz_name, created_at = tz_row
+
+        # Create two columns: left for timezone, right for delete button
+        col1, col2 = st.columns([8, 1])  # Adjust ratio as needed
+
+        with col1:
+        	components.html(
+            f"""
+            <div style="
+                background-color: #262730;
+                color: white;
+                padding: 12px;
+                border-radius: 10px;
+                font-family: Arial, sans-serif;
+                font-size: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <div><b>{tz_name}</b> - <span id="tz-{tz_id}">{datetime.now(pytz.timezone(tz_name)).strftime('%Y-%m-%d %H:%M:%S')}</span></div>
+            </div>
+            <script>
+                const span_{tz_id} = document.getElementById("tz-{tz_id}");
+                function updateTime_{tz_id}() {{
+                    let now = new Date().toLocaleString("en-US", {{ timeZone: "{tz_name}", hour12: false }});
+                    span_{tz_id}.innerText = now;
+                }}
+                setInterval(updateTime_{tz_id}, 1000);
+                updateTime_{tz_id}();
+            </script>
+            """,
+            height=50
+        )
+
+        with col2:
+            if st.button("🗑", key=f"del_tz_{tz_id}"):
+                # Delete from DB
+                execute_with_github_backup("DELETE FROM timezones WHERE id=?", (tz_id,))
+                st.info(f"Timezone {tz_name} removed!")
+                st.rerun()
+
+
 # =====================
 # Main
 # =====================
@@ -628,11 +830,11 @@ def page_data_pipelines():
 def main():
     init_app()
 
-    st.sidebar.title("🔧 Data Engineer's Toolkit")
+    st.sidebar.title("🔧 Naresh's Toolkit")
     page = st.sidebar.radio("Navigate to:", [
         "Dashboard", "To Do List", "Links", "Passwords", "Files",
         "SQL Snippets", "Airflow DAGs", "Snowflake Configs",
-        "Data Pipelines"
+        "Data Pipelines","Timezones"
     ])
 
     if page == "Dashboard":
@@ -653,6 +855,8 @@ def main():
         page_snowflake_configs()
     elif page == "Data Pipelines":
         page_data_pipelines()
+    elif page == "Timezones":
+        page_timezones()
 
     st.sidebar.markdown("---")
     st.sidebar.info("🔒 Passwords are encrypted with Fernet (stable key or passphrase in secrets)")
