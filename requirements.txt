@@ -2,3 +2,4 @@ streamlit
 cryptography
 requests
 snowflake-connector-python
+streamlit_ace
