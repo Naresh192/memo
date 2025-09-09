@@ -1,20 +1,20 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import json
 import base64
 import hashlib
 import requests
-import os
 from cryptography.fernet import Fernet, InvalidToken
 from datetime import datetime
 import snowflake.connector
 from streamlit_ace import st_ace
 import streamlit.components.v1 as components
-
-
-import streamlit as st
 import pytz
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, export_text, plot_tree
+import matplotlib.pyplot as plt
+
 
 # Custom CSS for elegant buttons
 st.markdown("""
@@ -509,42 +509,78 @@ def page_sql_snippets():
                 st.success("SQL snippet saved!")
 
     with tab2:
+        st.subheader("Saved Snippets")
+
+        if "editing_snippet_id" not in st.session_state:
+            st.session_state.editing_snippet_id = None
+
         with get_connection() as conn:
             snippets = conn.execute("SELECT * FROM sql_snippets ORDER BY created_at DESC").fetchall()
+
         for snippet in snippets:
-            with st.expander(f"{snippet[1]} ({snippet[3]})"):
-                #st.code(snippet[2], language='sql')
-                user_code = st_ace(value=snippet[2], language="sql", theme="monokai", height=100)
+            snippet_id = snippet[0]
+            with st.expander(f"{snippet[1]} ({snippet[3]})", expanded=(st.session_state.editing_snippet_id == snippet_id)):
+                user_code = st_ace(value=snippet[2], language="sql", theme="monokai", height=100, key=f"ace_{snippet_id}")
                 st.write(f"**Description:** {snippet[4]}")
                 st.write(f"**Tags:** {snippet[5]}")
                 st.write(f"**Created:** {snippet[6]}")
-                st.markdown(f"**Category:** {snippet[3]}  ")
+                st.markdown(f"**Category:** {snippet[3]}")
 
-                # If this is a Snowflake snippet
+                # Edit Button Logic
+                if st.session_state.editing_snippet_id == snippet_id:
+                    with st.form(f"edit_form_{snippet_id}"):
+                        new_title = st.text_input("Title", value=snippet[1])
+                        new_db_type = st.selectbox("Database", [
+                            "Snowflake", "PostgreSQL", "MySQL", "Oracle", "SQL Server", "BigQuery", "Redshift"
+                        ], index=["Snowflake", "PostgreSQL", "MySQL", "Oracle", "SQL Server", "BigQuery", "Redshift"].index(snippet[3]))
+                        new_code = st.text_area("SQL Code", value=snippet[2], height=150)
+                        new_desc = st.text_area("Description", value=snippet[4])
+                        new_tags = st.text_input("Tags", value=snippet[5])
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.form_submit_button("✅ Save Changes"):
+                                execute_with_github_backup(
+                                    "UPDATE sql_snippets SET title = ?, database_type = ?, sql_code = ?, description = ?, tags = ? WHERE id = ?",
+                                    (new_title, new_db_type, new_code, new_desc, new_tags, snippet_id)
+                                )
+                                st.success("Snippet updated successfully!")
+                                st.session_state.editing_snippet_id = None
+                                st.rerun()
+                        with col2:
+                            if st.form_submit_button("❌ Cancel"):
+                                st.session_state.editing_snippet_id = None
+                                st.rerun()
+                else:
+                    if st.button("✏️ Edit", key=f"edit_btn_{snippet_id}"):
+                        st.session_state.editing_snippet_id = snippet_id
+                        st.rerun()
+
+                # Snowflake config execution (unchanged)
                 if snippet[3].lower() == "snowflake":
-                    # Load saved configs
                     with get_connection() as conn:
                         configs = conn.execute("SELECT id, config_name, account_url, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
                     if configs:
                         config_options = {f"{c[1]} ({c[2]})": c for c in configs}
-                        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{snippet[0]}")
-                        if st.button("Run on Snowflake", key=f"run_{snippet[0]}"):
+                        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_{snippet_id}")
+                        if st.button("Run on Snowflake", key=f"run_{snippet_id}"):
                             cfg = config_options[selected]
                             config_dict = {
                                 "name": cfg[1],
                                 "account": cfg[2],
                                 "user": cfg[3],
-                                "password": cfg[4],
+                                "password": decrypt_password(cfg[4]),
                                 "warehouse": cfg[5],
                                 "database": cfg[6],
                                 "schema": cfg[7],
                                 "role": cfg[8],
                             }
-                            cols, rows = run_snowflake_query(config_dict, user_code)  # row[2] is snippet text
+                            cols, rows = run_snowflake_query(config_dict, user_code)
                             if cols and rows:
                                 st.dataframe(pd.DataFrame(rows, columns=cols))
-                if st.button("Delete", key=f"del_sql_{snippet[0]}"):
-                    execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet[0],))
+
+                if st.button("🗑️ Delete", key=f"del_sql_{snippet_id}"):
+                    execute_with_github_backup("DELETE FROM sql_snippets WHERE id = ?", (snippet_id,))
                     st.rerun()
 
 
@@ -686,7 +722,7 @@ def page_snowflake_configs():
                 encrypted_pw = encrypt_password(password)
                 execute_with_github_backup(
                     "INSERT INTO snowflake_configs (config_name, account_url, warehouse, user, password, database, schema, role, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (config_name, account_url, warehouse, user, password, database, schema, role, notes, datetime.now())
+                    (config_name, account_url, warehouse, user, encrypted_pw, database, schema, role, notes, datetime.now())
                 )
                 st.success("Snowflake configuration saved!")
 
@@ -699,7 +735,7 @@ def page_snowflake_configs():
                 st.write(f"**Account URL:** {config[2]}")
                 st.write(f"**Warehouse:** {config[3]}")
                 st.write(f"**User Name:** {config[4]}")
-                st.write(f"**Password:** {config[5]}")
+                st.write(f"**Password:** {decrypted_pw}")
                 st.write(f"**Database:** {config[6]}")
                 st.write(f"**Schema:** {config[7]}")
                 st.write(f"**Role:** {config[8]}")
@@ -821,6 +857,175 @@ def page_timezones():
                 execute_with_github_backup("DELETE FROM timezones WHERE id=?", (tz_id,))
                 st.info(f"Timezone {tz_name} removed!")
                 st.rerun()
+                
+                
+def dtree() :
+    # Streamlit App Title
+    st.title("🧠 Decision Tree Explorer")
+    st.write("Upload any CSV file, choose a target column, and visualize how a decision tree learns patterns in the data.")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+    
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.subheader("Dataset Preview")
+        st.write(df.head())
+    
+        # Column selection
+        target_column = st.selectbox("Select the Target Column", options=df.columns)
+    
+        if target_column:
+            # Parameters
+            max_depth = st.slider("Max Depth of Tree (optional)", min_value=1, max_value=20, value=5)
+            test_size = st.slider("Test Set Size", min_value=0.1, max_value=0.5, step=0.05, value=0.2)
+    
+            if st.button("Train Decision Tree"):
+                X = df.drop(columns=[target_column])
+                y = df[target_column]
+    
+                # Fill missing values
+                X = X.fillna(method='ffill').fillna(method='bfill')
+                y = y.fillna(method='ffill').fillna(method='bfill')
+    
+                # Encode features but store mappings to decode later
+                label_encoders = {}
+                original_values = {}
+                for col in X.select_dtypes(include=['object', 'category']).columns:
+                    le = LabelEncoder()
+                    X[col] = le.fit_transform(X[col].astype(str))
+                    label_encoders[col] = le
+                    original_values[col] = dict(zip(range(len(le.classes_)), le.classes_))
+    
+                # Detect task type
+                is_classification = y.dtype == 'object' or y.nunique() < 20
+                if is_classification:
+                    le_target = LabelEncoder()
+                    y = le_target.fit_transform(y.astype(str))
+                    original_target_values = dict(zip(range(len(le_target.classes_)), le_target.classes_))
+                else:
+                    le_target = None
+                    original_target_values = None
+    
+                # Train/test split
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+    
+                # Model
+                if is_classification:
+                    model = DecisionTreeClassifier(max_depth=max_depth, random_state=42,criterion="gini")
+                else:
+                    model = DecisionTreeRegressor(max_depth=max_depth, random_state=42)
+    
+                model.fit(X_train, y_train)
+                score = model.score(X_test, y_test)
+    
+                st.success(f"Model trained. Test Set Accuracy / R² Score: **{round(score, 4)}**")
+    
+                # Feature Importances
+                st.subheader("📊 Feature Importances")
+                importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+                st.bar_chart(importances)
+    
+                # Decision tree rules with decoded values
+                st.subheader("📜 Decision Tree Rules")
+    
+                def decode_feature_value(feature, val):
+                    """Map encoded value back to original label if applicable"""
+                    if feature in original_values:
+                        return f"{original_values[feature].get(int(val), val)}"
+                    return f"{val}"
+    
+                tree_rules = export_text(model, feature_names=list(X.columns))
+                decoded_lines = []
+    
+                for line in tree_rules.split('\n'):
+                    for feature in original_values:
+                        if feature in line:
+                            parts = line.split(feature)
+                            if len(parts) > 1:
+                                # Get numeric value and decode
+                                value_part = parts[1]
+                                try:
+                                    value = float(value_part.strip().split()[1])
+                                    original_val = decode_feature_value(feature, value)
+                                    line = line.replace(str(value), f"{original_val} ({(value)})")
+                                except:
+                                    pass
+                    decoded_lines.append(line)
+    
+                st.code('\n'.join(decoded_lines))
+    
+                # Plot tree with class names
+                st.subheader("🌳 Decision Tree Visualization")
+                fig, ax = plt.subplots(figsize=(16, 8))
+                plot_tree(
+                    model,
+                    feature_names=X.columns,
+                    filled=True,
+                    class_names=(le_target.classes_ if is_classification else None),
+                    ax=ax
+                )
+                st.pyplot(fig)
+    
+                st.info("Note: Categorical values in tree rules are shown with both original label and encoded value.")
+                
+def mon() :
+    
+    col1, col2 = st.columns(2)
+    col1.title("Monitoring job runs")
+    with get_connection() as conn:
+        configs = conn.execute("SELECT id, config_name, account_url, user, password, warehouse, database, schema, role FROM snowflake_configs").fetchall()
+    if configs:
+        config_options = {f"{c[1]} ({c[2]})": c for c in configs}
+        selected = st.selectbox("Select Snowflake Config", list(config_options.keys()), key=f"cfg_mon")
+        cfg = config_options[selected]
+        config_dict = {
+                "name": cfg[1],
+                "account": cfg[2],
+                "user": cfg[3],
+                "password": decrypt_password(cfg[4]),
+                "warehouse": cfg[5],
+                "database": cfg[6],
+                "schema": cfg[7],
+                "role": cfg[8],
+            }    
+    if col2.button("Get Data") :
+    
+        query = """
+            SELECT *
+            FROM d3_data_ops_lab.support.informatica_job_log_entries
+            WHERE starttime >= DATEADD(HOUR, 16, CURRENT_DATE - 1)
+            ORDER BY starttime DESC;
+        """
+        cols, df = run_snowflake_query(config_dict, query)
+        df = pd.DataFrame(df, columns=cols)
+    
+        if df.empty:
+            st.warning("⚠️ No job runs found for the given time range.")
+            st.stop()
+        
+        total_runs = len(df)
+        failed_runs = len(df[df['STATUS'].str.upper() == "FAILED"])
+        successful_runs = len(df[df['STATUS'].str.upper() == "COMPLETED"])
+        success_rate = (successful_runs / total_runs) * 100 if total_runs > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Runs", total_runs)
+        col2.metric("Successful Runs", successful_runs)
+        col3.metric("Failed Runs", failed_runs, delta=-failed_runs if failed_runs else None)
+        col4.metric("Success Rate", f"{success_rate:.1f}%")
+        
+        st.subheader("🚨 Failed Instances")
+        if failed_runs > 0:
+            failed_df = df[df['STATUS'].str.upper() == "FAILED"]
+            st.dataframe(failed_df[["STARTTIME", "ENDTIME", "STATUS", "ERRORMESSAGE", "RUNID"]])
+        else:
+            st.success("✅ No failures detected.")
+        
+        st.subheader("📜 Job Run Details")
+        st.dataframe(df.head())
+    
+
 
 
 # =====================
@@ -834,7 +1039,7 @@ def main():
     page = st.sidebar.radio("Navigate to:", [
         "Dashboard", "To Do List", "Links", "Passwords", "Files",
         "SQL Snippets", "Airflow DAGs", "Snowflake Configs",
-        "Data Pipelines","Timezones"
+        "Data Pipelines","Timezones", "Decision Tree", "Monitoring"
     ])
 
     if page == "Dashboard":
@@ -857,6 +1062,10 @@ def main():
         page_data_pipelines()
     elif page == "Timezones":
         page_timezones()
+    elif page == "Decision Tree" :
+        dtree()
+    elif page == "Monitoring" :
+        mon()
 
     st.sidebar.markdown("---")
     st.sidebar.info("🔒 Passwords are encrypted with Fernet (stable key or passphrase in secrets)")
